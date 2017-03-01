@@ -1,0 +1,17 @@
+OUTFLOW:
+setOpenBound(flags, bwidth, "yY", FlagOutFlow|FlagEmpty)
+This function sets open boundaries at top and bottom.
+
+The string "yY" sets the open boudaries at both bottom "y", and top "Y". Using just "Y" will 
+only make the top open.
+
+bwidth is (i think) the width of the boundary, and needs to be defined before calling the
+function. In example plume_2d.py it is set to 1
+
+
+INFLOW:
+densityInflow(flags=flags, density=density, noise=noise, shape=source, scale=1, sigma=0.5)
+Init noise-modulated density inside shape
+
+Scale: Force/power/speed(??) of plume. Higher scale gives higher density and higher velocity of plume
+Sigma: Dispersion of plume. Higher sigma gives lower density, and higher velocity of plume
