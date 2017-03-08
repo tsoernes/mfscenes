@@ -1,9 +1,10 @@
-# Training script for creating 2D or 3D data with or without geometry.
+# Training script for creating 3D data 
 # Usage:
+#    manta must be called from it's directory (build) or else there will be
+#    import errors
 #
-#    manta ../scenes/_trainingData.py --help
+#    manta ../scenes/r1.py
 #
-#    manta ../scenes/_trainingData.py --dim 3
 
 import argparse
 import gc
@@ -21,7 +22,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--dim", type=int, default=3)
 ap.add_argument("--numFrames", type=int, default=256)
 ap.add_argument("--frameStride", type=int, default=4)
-# The CFL condition states that ∆t should
+# The CFL condition states that ∆t (time step) should
 # be small enough so that the maximum motion in the velocity field
 # is less than the width of a grid cell.
 ap.add_argument("--timeStep", type=float, default=0.1)
@@ -42,7 +43,8 @@ resX = x[1] - x[0]
 resY = y[1] - y[0]
 resZ = z[1] - z[0]
 
-# Adding dead zones in corners not necessarry if on not setting random initial vel or noise?
+# PS: Adding dead zones in corners should not be necessarry if 
+#   not setting random initial vel or noise
 
 args = ap.parse_args()
 print("\nUsing arguments:")
@@ -63,7 +65,7 @@ Most functions expecting vec3 will also accept a python tuple or sequence
 of 3 numbers. When creating an mantaflow object, you can always specify a
 name parameter, which is used in debug output and in the GUI.
 """
-solver = Solver(name="main", gridSize=gridSize, dim=args.dim)
+solver = FluidSolver(name="main", gridSize=gridSize, dim=args.dim)
 solver.timestep = args.timeStep
 
 datasetName = "output_current_3d_r1"
@@ -80,7 +82,7 @@ modelListTest = VoxelUtils.create_voxel_file_list(
     args.voxelPath, args.voxelNameRegex)
 
 # Next, the solver object is used to create grids. In the same way,
-# any other object can be created with the solver s as a parent.
+#   any other object can be created with the solver s as a parent.
 flags = solver.create(FlagGrid) # The flag grid stores cell type (Fluid/Obstacle/Air).
 vel = solver.create(MACGrid)
 # What's velTmp used for?
@@ -95,9 +97,8 @@ if not verbose:
 else:
   setDebugLevel(10)  # Print like crazy!
 
-if (GUI):
-  gui = Gui()
-  gui.show(True)
+gui = Gui()
+gui.show(True)
 
 
 vel.clear()
@@ -110,11 +111,12 @@ density.clear()
 flags.initDomain() # creates an empty box with solid boundaries
 flags.fillGrid() #  marks all inner cells as fluid
 
-# Add Model Geometry:
+# Add Model Geometry
 geom = binvox_rw.Voxels(np.zeros(inputDims), inputDims, [0, 0, 0],
   [1, 1, 1], "xyz", 'cur_geom')
 VoxelUtils.create_grid_layout_stat(modelListTest, layoutBoxSize, geom, args.dim)
- 
+
+# The minecraft model has some extra blocks on the edges that we do not want
 for i in range(x[0], x[1]+1):
   for j in range(y[0], y[1]+1):
     for k in range(z[0], z[1]+1):
@@ -132,7 +134,7 @@ utils.CreateRandomDensity(density)
 
 # Random emitters.
 emitters = []
-numEmitters = 5
+numEmitters = 0
 
 emitterAmps = []
 globalEmitterAmp = random.uniform(0.1, 1)
@@ -159,10 +161,27 @@ for e in range(0, numEmitters):
                                resZ, eCurvature, eCurveTScale, utils.bWidth))
   emitterAmps.append(eAmp)
 
-print('  Num Emitters: ' + str(len(emitters)))
-print('  Global emitter amp: ' + str(globalEmitterAmp))
-print('  Emitter min amp: ' + str(min(emitterAmps)))
-print('  Emitter max amp: ' + str(max(emitterAmps)))
+if emitters:
+  print('  Num Emitters: ' + str(len(emitters)))
+  print('  Global emitter amp: ' + str(globalEmitterAmp))
+  print('  Emitter min amp: ' + str(min(emitterAmps)))
+  print('  Emitter max amp: ' + str(max(emitterAmps)))
+
+# Add inflows (particle emitters)
+source = solver.create(Cylinder, center=vec3(20,12,20), radius=5,
+                  z=vec3(0, 1, 0))
+
+noise = solver.create(NoiseField, loadFromFile=True)
+noise.posScale = vec3(45)
+noise.clamp = True
+noise.clampNeg = 0
+noise.clampPos = 1
+noise.valOffset = 0.75
+noise.timeAnim = 0.2
+# in the loop do: source.applyToGrid(grid=density, value=1.0)
+
+# Add outflows
+
 
 residue = 0
 offset = 0  # You can use this to add additional frames.
@@ -194,7 +213,11 @@ for t in range(args.numFrames):
           (residue))
       print("--> Starting a new simulation")
       break
+  
 
+  densityInflow(flags=flags, density=density, noise=noise, shape=source,
+                scale=1, sigma=0.5)
+  #source.applyToGrid(grid=density, value=1.0)
   advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2,
                      boundaryWidth=utils.bWidth)
   advectSemiLagrange(flags=flags, vel=vel, grid=vel, order=2,

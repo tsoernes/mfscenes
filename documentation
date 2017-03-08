@@ -19,3 +19,16 @@ Scale: Force/power/speed(??) of plume. Higher scale gives
 higher density and higher velocity of plume
 Sigma: Dispersion of plume. Higher sigma gives lower 
 density, and higher velocity of plume
+
+TODO: Figure out what the arguments for noise does. 'noise' is used when
+creating a sylinder, which in turn is used as inflow 
+
+noise = s.create(NoiseField, loadFromFile=True)
+noise.posScale = vec3(45)
+noise.clamp = True
+noise.clampNeg = 0
+noise.clampPos = 1
+noise.valOffset = 0.75
+noise.timeAnim = 0.2
+
+
