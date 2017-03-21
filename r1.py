@@ -1,7 +1,7 @@
 # Training script for creating 3D data 
 # Usage:
-#    manta must be called from it's directory (build) or else there will be
-#    import errors
+#    manta must be called from it's directory (build) or else there will 
+#    be import errors
 #
 #    manta ../scenes/r1.py
 #
@@ -124,11 +124,7 @@ for i in range(x[0], x[1]+1):
         flags.setObstacle(i-x[0], j-y[0], k-z[0])
 
 
-# Noise field used to initialize velocity fields.
-noise = None
 gc.collect()
-#if args.addNoise:
-#  noise = utils.CreateNoiseField(solver)
 
 utils.CreateRandomDensity(density)
 
@@ -170,7 +166,10 @@ if emitters:
 # Add inflows (particle emitters)
 source = solver.create(Cylinder, center=vec3(20,12,20), radius=5,
                   z=vec3(0, 1, 0))
+# in the loop do: source.applyToGrid(grid=density, value=1.0)
 
+# Noise field used to initialize velocity fields.
+noise = None
 noise = solver.create(NoiseField, loadFromFile=True)
 noise.posScale = vec3(45)
 noise.clamp = True
@@ -178,16 +177,17 @@ noise.clampNeg = 0
 noise.clampPos = 1
 noise.valOffset = 0.75
 noise.timeAnim = 0.2
-# in the loop do: source.applyToGrid(grid=density, value=1.0)
 
 # TODO: Add outflows
 
 
+directory = "../../data/datasets/%s/%06d" % \
+    (datasetName, 0)
+if not os.path.exists(directory):
+    os.makedirs(directory)
+
 residue = 0
-offset = 0  # You can use this to add additional frames.
 for t in range(args.numFrames):
-  directory = "../../data/datasets/%s/%06d" % \
-      (datasetName, offset)
 
   if (t + 1 != args.numFrames):
     sys.stdout.write('  Simulating %d of %d\r' % (t + 1, args.numFrames))
@@ -195,29 +195,16 @@ for t in range(args.numFrames):
   else:
     print('  Simulating %d of %d' % (t + 1, args.numFrames))  # keep \n char
 
-  if not os.path.exists(directory):
-    os.makedirs(directory)
 
   if(t == 0):
     residue = utils.InitSim(flags, vel, velTmp, noise, density, pressure,
                             utils.bWidth, utils.cgAccuracy,
                             utils.precondition, utils.cgMaxIterFac)
-    if math.isnan(residue):
-      print ("T=0: residue isNan")
-      # Try again but with the preconditioner off.
-      residue = utils.InitSim(flags, vel, velTmp, noise, density, pressure,
-                              utils.bWidth, utils.cgAccuracy,
-                              False, utils.cgMaxIterFac)
-    if residue > utils.cgAccuracy * 10 or math.isnan(residue):
-      print("WARNING: Residue (%f) has blown up before starting sim)" % \
-          (residue))
-      print("--> Starting a new simulation")
-      break
-  
+
 
   densityInflow(flags=flags, density=density, noise=noise, shape=source,
                 scale=1, sigma=0.5)
-  #source.applyToGrid(grid=density, value=1.0)
+  source.applyToGrid(grid=density, value=1.0)
   advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2,
                      boundaryWidth=utils.bWidth)
   advectSemiLagrange(flags=flags, vel=vel, grid=vel, order=2,
@@ -248,43 +235,9 @@ for t in range(args.numFrames):
                           cgAccuracy=utils.cgAccuracy,
                           precondition=utils.precondition)
 
-  if math.isnan(residue):
-    print ("Residue isNan")
-    # try again but with the preconditioner off.
-    residue = solvePressure(flags=flags, vel=vel, pressure=pressure,
-                            cgMaxIterFac=utils.cgMaxIterFac,
-                            cgAccuracy=utils.cgAccuracy,
-                            precondition=False)
-
   if residue < utils.cgAccuracy * 10 or not math.isnan(residue):
+    # This (pretty much?) always fires 
     setWallBcs(flags=flags, vel=vel)  # This will be "in" the model.
-  else:
-    # If we hit maxIter, than residue will be higher than our
-    # specified accuracy.  This is OK, but we shouldn't let it grow too
-    # much.
-    #
-    # If it does grow (it happens 1 in every ~10k frames), then the best
-    # thing to do is just start a new simulation rather than crashing out
-    # completely. This ends up being faster than letting the solver
-    # arbitrarily increase the number of iterations.
-    #
-    # Admittedly this is a hack. These high residue frames could be (and
-    # probably are) highly correlated with ConvNet failure frames and so are
-    # likely examples that we should be trying to incorporate. Unfortunately,
-    # they're rare, and they result in significantly longer simulation
-    # times when the solver bumps up against the max iter, that it's just
-    # not worth it to include them.
-    print("WARNING: Residue (%f) has blown up on frame %d" % (residue, t))
-    print("--> Starting a new simulation")
-
-    # Remove the last recorded divergent frame.
-    if t % args.frameStride == 0:
-      filename = "%06d_divergent.bin" % t
-      fullFilename = directory + "/" + filename
-      os.remove(fullFilename)
-
-    # Break out of frame loop (and start a new sim).
-    break
 
   if t % args.frameStride == 0:
     filename = "%06d.bin" % t
