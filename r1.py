@@ -36,6 +36,7 @@ ap.add_argument("--datasetNamePostfix", type=str, default="")
 verbose = False
 addVortConf = True
 
+# Remove dead/empty space from model
 x = [12, 52] 
 y = [0, 63]
 z = [17, 47]
@@ -62,8 +63,7 @@ First, a solver object is created. Solver objects are the parent object for
 grids, particle systems and most other simulation objects. It requires
 gridSize as a parameter, for which we use the custom vec3 datatype.
 Most functions expecting vec3 will also accept a python tuple or sequence
-of 3 numbers. When creating an mantaflow object, you can always specify a
-name parameter, which is used in debug output and in the GUI.
+of 3 numbers. 
 """
 solver = FluidSolver(name="main", gridSize=gridSize, dim=args.dim)
 solver.timestep = args.timeStep
@@ -180,7 +180,7 @@ noise.valOffset = 0.75
 noise.timeAnim = 0.2
 # in the loop do: source.applyToGrid(grid=density, value=1.0)
 
-# Add outflows
+# TODO: Add outflows
 
 
 residue = 0
