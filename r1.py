@@ -5,6 +5,31 @@
 #
 #    manta ../scenes/r1.py
 #
+# "I would recommend to model the inflows with obstacle flags, and a custom fixed velocity 
+# into the domain. 
+# Then you can define custom outflow regions in the flag grid (FlagOutflow).
+# The open boundaries currently use that, you can check out "plume_2d" as an example. 
+# Esp. the openBounds option will be important in the velocity advection."
+# 
+# So..
+# How can inflows be modeled with obstacle flags?
+#   Maybe by creating objects (Cylinder) like in plume_2d?
+#
+# Set open bound (FlagEmpty??) behind the classroom front (and under the floor)
+# (Remove obstacle flags from under the seats to model inflows there)
+# Set fixed velocity (maybe it's necessary to have two velocity fields --
+#   either to have different velocity between front and floor inflows
+#   or to ensure that the inflow air exits the inflows at the correct (normal) angle
+#   and not at 45 degrees
+# velInflow = vec3(0.9, 0, 0)
+# vel.setConst(velInflow)
+# before (solvePressure, setWallBcs) and after:
+# setInflowBcs(vel=vel,dir='xX',value=velInflow)
+#
+# useful examples: 
+#   plume_2d
+#   waveletturbulence 
+#   freesurface (for outflow boundaries)
 
 import argparse
 import gc
@@ -20,23 +45,28 @@ ap = argparse.ArgumentParser()
 
 # Some arguments the user might want to set.
 ap.add_argument("--dim", type=int, default=3)
-ap.add_argument("--numFrames", type=int, default=256)
-ap.add_argument("--frameStride", type=int, default=4)
+ap.add_argument("--numFrames", type=int, default=2000)
+#ap.add_argument("--frameStride", type=int, default=4)
 # The CFL condition states that ∆t (time step) should
 # be small enough so that the maximum motion in the velocity field
 # is less than the width of a grid cell.
-ap.add_argument("--timeStep", type=float, default=0.1)
+#ap.add_argument("--timeStep", type=float, default=0.1)
+ap.add_argument("--timeStep", type=float, default=1)
 ap.add_argument("--addNoise", type=bool, default=True)
 ap.add_argument("--addVortConf", type=bool, default=True)
 ap.add_argument("--voxelPath", type=str, default="../../voxelizer/r1voxels/")
 ap.add_argument("--voxelNameRegex", type=str, default=".*_(64|128)\.binvox")
 ap.add_argument("--voxelLayoutBoxSize", type=int, default=64)
 ap.add_argument("--datasetNamePostfix", type=str, default="")
+ap.add_argument("--plumeScale", type=float, default=0.25)
 
 verbose = False
 addVortConf = True
 
-# Remove dead/empty space from model
+# TODO: Consider scaling model up to 128. In comparison to 'simpleplume' the
+# model seems somewhat coarse.  
+
+# The minecraft model has some extra blocks and dead space on the edges that we do not want
 x = [12, 52] 
 y = [0, 63]
 z = [17, 47]
@@ -82,13 +112,13 @@ modelListTest = VoxelUtils.create_voxel_file_list(
     args.voxelPath, args.voxelNameRegex)
 
 # Next, the solver object is used to create grids. In the same way,
-#   any other object can be created with the solver s as a parent.
+#   any other object can be created with the solver as a parent.
 flags = solver.create(FlagGrid) # The flag grid stores cell type (Fluid/Obstacle/Air).
 vel = solver.create(MACGrid)
 # What's velTmp used for?
-velTmp = solver.create(VecGrid)  # Internally a Grid<Vec3>
-pressure = solver.create(RealGrid)
+#velTmp = solver.create(VecGrid)  # Internally a Grid<Vec3>
 density = solver.create(RealGrid)
+pressure = solver.create(RealGrid)
 
 timings = Timings()
 
@@ -101,22 +131,29 @@ gui = Gui()
 gui.show(True)
 
 
-vel.clear()
-velTmp.clear()
-pressure.clear()
-density.clear()
-
+# Add inflows 
+source = Cylinder( parent = solver, center=vec3(20,1,20), radius=6, z=vec3(0,
+                                                                            0.5, 0))
 # As most plugins expect the outmost cells of a simulation to be obstacles,
 # this should always be used. 
+# flags.initDomain(inflow="xX", phiWalls=phiWalls, boundaryWidth=0)
 flags.initDomain() # creates an empty box with solid boundaries
 flags.fillGrid() #  marks all inner cells as fluid
+
+# Where is plume positioned?
+# plumeRad = 0.15  # Should match rad in fluid_net_3d_sim.
+# plumeScale = args.plumeScale
+# plumeUp = True
+# plumeFace = 'y'
+# setPlumeBound(flags, density, vel, utils.bWidth, plumeRad, plumeScale, plumeUp,
+#              plumeFace)
 
 # Add Model Geometry
 geom = binvox_rw.Voxels(np.zeros(inputDims), inputDims, [0, 0, 0],
   [1, 1, 1], "xyz", 'cur_geom')
 VoxelUtils.create_grid_layout_stat(modelListTest, layoutBoxSize, geom, args.dim)
 
-# The minecraft model has some extra blocks on the edges that we do not want
+# Add the Minecraft model as solid blocks
 for i in range(x[0], x[1]+1):
   for j in range(y[0], y[1]+1):
     for k in range(z[0], z[1]+1):
@@ -126,7 +163,8 @@ for i in range(x[0], x[1]+1):
 
 gc.collect()
 
-utils.CreateRandomDensity(density)
+# Do we really want or need random density? prolly not
+#utils.CreateRandomDensity(density)
 
 # Random emitters.
 emitters = []
@@ -163,20 +201,16 @@ if emitters:
   print('  Emitter min amp: ' + str(min(emitterAmps)))
   print('  Emitter max amp: ' + str(max(emitterAmps)))
 
-# Add inflows (particle emitters)
-source = solver.create(Cylinder, center=vec3(20,12,20), radius=5,
-                  z=vec3(0, 1, 0))
-# in the loop do: source.applyToGrid(grid=density, value=1.0)
-
 # Noise field used to initialize velocity fields.
 noise = None
 noise = solver.create(NoiseField, loadFromFile=True)
-noise.posScale = vec3(45)
-noise.clamp = True
-noise.clampNeg = 0
-noise.clampPos = 1
-noise.valOffset = 0.75
-noise.timeAnim = 0.2
+noise.posScale = vec3(90)
+#noise.posScale = vec3(45)
+noise.clamp = False
+#noise.clampNeg = 0
+#noise.clampPos = 1
+#noise.valOffset = 0.75
+#noise.timeAnim = 0.2
 
 # TODO: Add outflows
 
@@ -196,53 +230,59 @@ for t in range(args.numFrames):
     print('  Simulating %d of %d' % (t + 1, args.numFrames))  # keep \n char
 
 
-  if(t == 0):
+  #if(t == 0):
+  if(False):
     residue = utils.InitSim(flags, vel, velTmp, noise, density, pressure,
                             utils.bWidth, utils.cgAccuracy,
                             utils.precondition, utils.cgMaxIterFac)
 
 
   densityInflow(flags=flags, density=density, noise=noise, shape=source,
-                scale=1, sigma=0.5)
+                scale=0, sigma=1.0)
   source.applyToGrid(grid=density, value=1.0)
   advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2,
                      boundaryWidth=utils.bWidth)
   advectSemiLagrange(flags=flags, vel=vel, grid=vel, order=2,
-                     openBounds=True, boundaryWidth=utils.bWidth)
+                     strength=1.0, boundaryWidth=utils.bWidth)
+                     #openBounds=True, boundaryWidth=utils.bWidth)
 
   # set zero normal velocity boundary condition on walls /
   # the boundary conditions at the obstacle are re-set
   setWallBcs(flags=flags, vel=vel)
+  #if emitters:
+  #  for em in emitters:
+  #    em.update(solver.timestep, solver.timestep * t)
+  #    em.addVelocities(vel, flags, utils.bWidth)
+  #  setWallBcs(flags=flags, vel=vel)
+  #setPlumeBound(flags, density, vel, utils.bWidth, plumeRad, plumeScale,
+  #              plumeUp, plumeFace)
 
-  for em in emitters:
-    em.update(solver.timestep, solver.timestep * t)
-    em.addVelocities(vel, flags, utils.bWidth)
+  #if addVortConf:
+  #  vStrength = solver.dx()
+  #  vorticityConfinement(vel=vel, flags=flags, strength=vStrength)
 
+  # if t % args.frameStride == 0:
+  #   filename = "%06d_divergent.bin" % t
+  #   fullFilename = directory + "/" + filename
+  #   writeOutSim(fullFilename, vel, pressure, density, flags)
+
+  addBuoyancy(density=density, vel=vel, gravity=vec3(0,-6e-4,0), flags=flags)
   setWallBcs(flags=flags, vel=vel)
+  residue = solvePressure(flags=flags, vel=vel, pressure=pressure)
+  # residue = solvePressure(flags=flags, vel=vel, pressure=pressure,
+  #                         cgMaxIterFac=utils.cgMaxIterFac,
+  #                         cgAccuracy=utils.cgAccuracy,
+  #                         precondition=utils.precondition)
 
-  if addVortConf:
-    vStrength = solver.dx()
-    vorticityConfinement(vel=vel, flags=flags, strength=vStrength)
-
-  if t % args.frameStride == 0:
-    filename = "%06d_divergent.bin" % t
-    fullFilename = directory + "/" + filename
-    writeOutSim(fullFilename, vel, pressure, density, flags)
-
+  # if residue < utils.cgAccuracy * 10 or not math.isnan(residue):
+  #   # This (pretty much?) always fires 
+  #   setWallBcs(flags=flags, vel=vel)  # This will be "in" the model.
   setWallBcs(flags=flags, vel=vel)  # This will be "in" the model.
-  residue = solvePressure(flags=flags, vel=vel, pressure=pressure,
-                          cgMaxIterFac=utils.cgMaxIterFac,
-                          cgAccuracy=utils.cgAccuracy,
-                          precondition=utils.precondition)
 
-  if residue < utils.cgAccuracy * 10 or not math.isnan(residue):
-    # This (pretty much?) always fires 
-    setWallBcs(flags=flags, vel=vel)  # This will be "in" the model.
-
-  if t % args.frameStride == 0:
-    filename = "%06d.bin" % t
-    fullFilename = directory + "/" + filename
-    writeOutSim(fullFilename, vel, pressure, density, flags)
+  # if t % args.frameStride == 0:
+  #   filename = "%06d.bin" % t
+  #   fullFilename = directory + "/" + filename
+  #   writeOutSim(fullFilename, vel, pressure, density, flags)
 
   solver.step()
 
