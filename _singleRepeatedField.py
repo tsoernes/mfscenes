@@ -105,7 +105,7 @@ for simnum in range(numSims):
 			vorticityConfinement( vel=vel, flags=flags, strength=vorticityStrength )
 		
 		#this is just so all of the arrays are instantiated for export
-    		'''
+ 		'''
 		if(t == 0):
 			advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2)    
 			advectSemiLagrange(flags=flags, vel=vel, grid=vel,     order=2, openBounds=True, boundaryWidth=bWidth )

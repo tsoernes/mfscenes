@@ -28,6 +28,9 @@ noise.valOffset = 0.75
 noise.timeAnim = 0.2
 
 # a cylinder shape is created, which will be used later as an inflow for smoke.
+# center = (32, 6.4, 32)
+# radius = 9
+# z = (0, 1.3, 0)
 source = s.create(Cylinder, center=gs*vec3(0.5,0.1,0.5), radius=res*0.14, z=gs*vec3(0, 0.02, 0))
 
 # initDomain creates an empty box with solid boundaries. 
