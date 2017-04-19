@@ -37,6 +37,7 @@ turb = s.create(TurbulenceParticleSystem, noise=noise)
 flags.initDomain()
 flags.fillGrid()
 
+setOpenBound(flags, 0, 'X', FlagEmpty|FlagOutflow)
 # obstacle grid
 for i in range(4):
 	for j in range(4):
@@ -54,8 +55,8 @@ box = Box( parent=s, center = gs*vec3(0.05,0.43,0.6), size=gs*vec3(0.02,0.005,0.
 # turbulence parameters
 L0 = 0.01 # turbulent (eddie) lenght scale
 mult = 0.1
-intensity = 0.10 # the turbulence intensity of the u-component of velocity at the inlet which is taken as 0.14 in the absence of measured values
-nu = 0.1 # Kinematic viscosity
+intensity = 0.14 # the turbulence intensity of the u-component of velocity at the inlet which is taken as 0.14 in the absence of measured values
+nu = 0.000016 # Kinematic viscosity
 prodMult = 2.5
 enableDiffuse = True
 
@@ -79,7 +80,7 @@ for t in range(10000):
 		enableDiffuse = checkDiff.get()
 		prodMult = sliderProd.get()
 	
-	turb.seed(box,500)
+	turb.seed(box,50)
 	turb.advectInGrid(flags=flags, vel=vel, integrationMode=IntRK4)
 	turb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=velInflow)
 	#turb.projectOutside(sdfgrad)
@@ -98,10 +99,10 @@ for t in range(10000):
 	# base solver
 	advectSemiLagrange(flags=flags, vel=vel, grid=vel, order=2)
 	setWallBcs(flags=flags, vel=vel)
-	setInflowBcs(vel=vel,dir='xXyYzZ',value=velInflow)
+	setInflowBcs(vel=vel,dir='xyYzZ',value=velInflow)
 	solvePressure(flags=flags, vel=vel, pressure=pressure, cgMaxIterFac=0.5)
 	setWallBcs(flags=flags, vel=vel)
-	setInflowBcs(vel=vel,dir='xXyYzZ',value=velInflow)
+	setInflowBcs(vel=vel,dir='xyYzZ',value=velInflow)
 	
 	timings.display()
 	s.step()

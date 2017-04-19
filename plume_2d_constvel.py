@@ -21,19 +21,18 @@ vel = s.create(MACGrid)
 density = s.create(RealGrid)
 pressure = s.create(RealGrid)
 
-
-# Is it necessary to add initial pressure/density????
-#density.setConst(1)
+density.setConst(1)
+pressure.setConst(1)
 
 bWidth=1
 flags.initDomain(boundaryWidth=bWidth) 
 flags.fillGrid()
 
 # Model outflows
-for i in range(1,63):
-	flags.setData(i,63,0,FlagOutflow|FlagEmpty)
-	flags.setData(i,62,0,FlagOutflow|FlagEmpty)
-
+#for i in range(1,63):
+#	flags.setData(i,63,0,FlagOutflow|FlagEmpty)
+#	flags.setData(i,62,0,FlagOutflow|FlagEmpty)
+setOpenBound(flags, bWidth, 'Y')
 # setOpenBound and source.applyToGrid(grid=flags, FlagOutflow|FlagEmpty) 
 #   should be equivalent, though perhaps not at the edges where an open cell
 #   has an obstacle neighbor
@@ -41,7 +40,8 @@ for i in range(1,63):
 
 # Model inflows
 # How come, that when the inflow is turned off after X seconds, that the velocity is 
-# higher in the stream vacuum than it was with the inflow turned on?
+# higher in the stream vacuum than it was with the inflow turned on? (Maybe the inflow
+# spits vacuum)
 velInflow = vec3(0,1,0)
 source = s.create( Box, center=(32, 1, 0.5), size=(10, 1, 0))
 # Need to revise which flag is used here.. Inflow, empty..????
@@ -68,14 +68,11 @@ steps = 2800
 for t in range(steps):
 	mantaMsg('\nFrame %i' % (s.frame))
 
-	# The order of the steps below need to be verified
-	#      Check examples and FluidForTheRestOfUS (smoke not liquid!)
-
-	if t<int(steps/2):
+	#if t<int(steps/2):
 		# Add particles to inflow
-		source.applyToGrid(grid=density, value=1)
+	source.applyToGrid(grid=density, value=1)
 		# Set particle velocity to constant at inflow 
-		source.applyToGrid(grid=vel, value=velInflow)
+	source.applyToGrid(grid=vel, value=velInflow)
 
 
 	advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2) 
@@ -84,7 +81,7 @@ for t in range(steps):
 	# Enforce a constant inflow/outflow at the grid boundaries
 	#   This sets constant velocity (1) to outflows, which does not seem
 	#   suitable for our model.  
-	#inOutBcs()
+	inOutBcs()
 
 	# Ensure empty flag in outflow cells, remove fluid particles and density
 	resetOutflow(flags=flags,real=density) 
@@ -93,7 +90,7 @@ for t in range(steps):
 	# Does this also apply to obstacles that are not at the edge of the grid? 
 	setWallBcs(flags=flags, vel=vel)    
 
-	#inOutBcs()
+	inOutBcs()
 
 	# Perform pressure projection of the velocity grid 
 	solvePressure(flags=flags, vel=vel, pressure=pressure)
