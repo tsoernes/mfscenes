@@ -12,7 +12,7 @@ s = Solver(name='main', gridSize = gs)
 s.timestep = 0.5
 timings = Timings()
 
-velInflow = vec3(0.52,0,0)
+velInflow = vec3(0.22,0,0)
 
 # prepare grids
 flags = s.create(FlagGrid)

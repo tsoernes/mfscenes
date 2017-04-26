@@ -106,8 +106,6 @@ eps = s.create(RealGrid)
 prod = s.create(RealGrid)
 nuT= s.create(RealGrid)
 strain= s.create(RealGrid)
-vc=s.create(MACGrid)
-temp=s.create(RealGrid)
 
 # noise field
 noise = s.create(NoiseField)
@@ -118,7 +116,6 @@ turb = s.create(TurbulenceParticleSystem, noise=noise)
 
 # As most plugins expect the outmost cells of a simulation to be obstacles,
 # this should always be used. 
-# flags.initDomain(inflow="xX", phiWalls=phiWalls, boundaryWidth=0)
 flags.initDomain(boundaryWidth=bWidth) # creates an empty box with solid boundaries
 flags.fillGrid() #  marks all inner cells as fluid
 
@@ -183,15 +180,14 @@ for x1 in range(6, resX, 7): # 40
     hole.applyToGrid(grid=flags, value=FlagOutflow|FlagEmpty)
 #setOpenBound(flags, bWidth, 'Z')
 
-sdfgrad = obstacleGradient(flags)
 sdf = obstacleLevelset(flags)
 bgr = s.create(Mesh)
 sdf.createMesh(bgr)
 
 
 # turbulence parameters
-L0 = 0.01 # turbulent (eddie) lenght scale
-intensity = 0.14 # the turbulence intensity of the u-component of velocity at the inlet which is taken as 0.14 in the absence of measured values
+L0 = 1 # turbulent (eddie) lenght scale
+intensity = 0.37 # the turbulence intensity of the u-component of velocity at the inlet which is taken as 0.14 in the absence of measured values
 nu = 0.00001568 # Kinematic viscosity of air at 25c (nu_t is turbulent/eddy viscosity)
 mult = 0.1
 prodMult = 2.5
@@ -229,7 +225,6 @@ for t in range(args.numFrames):
   turb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=fVelInflow)
   if chairIns:
     turb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=cVelInflow)
-  #turb.projectOutside(sdfgrad)
   turb.deleteInObstacle(flags)
   
   KEpsilonBcs(flags=flags,k=k,eps=eps,intensity=intensity,nu=nu,fillArea=False)
@@ -240,17 +235,16 @@ for t in range(args.numFrames):
   KEpsilonSources(k=k, eps=eps, prod=prod)
   
   if enableDiffuse:
+    # RANS
     KEpsilonGradientDiffusion(k=k, eps=eps, vel=vel, nuT=nuT, sigmaU=10.0);
 
 
   advectSemiLagrange(flags=flags, vel=vel, grid=vel, order=2,
                      openBounds=True, boundaryWidth=bWidth)
   setWallBcs(flags=flags, vel=vel)
-  #setInflowBcs(vel=vel,dir='xXyYzZ', value=fVelInflow)
   frontIn.applyToGrid(grid=vel, value=fVelInflow)
   for chairIn in chairIns:
     chairIn.applyToGrid(grid=vel, value=cVelInflow)
-  #addBuoyancy(density=density, vel=vel, gravity=vec3(0,0,-4e-3), flags=flags)
   solvePressure(flags=flags, vel=vel, pressure=pressure, cgMaxIterFac=0.5)
   setWallBcs(flags=flags, vel=vel)  
   frontIn.applyToGrid(grid=vel, value=fVelInflow)
