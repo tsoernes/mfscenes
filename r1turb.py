@@ -82,8 +82,8 @@ gridSize = vec3(resX, resY, resZ)
 resV = [res, res, res]
 
 addFront = True
-addChairs= True
-addSides = False
+addChairs= False
+addSides = True
 """
 First, a solver object is created. Solver objects are the parent object for
 grids, particle systems and most other simulation objects. It requires

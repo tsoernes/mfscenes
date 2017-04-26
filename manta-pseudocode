@@ -4,44 +4,52 @@ turbParams = {
   "nu" = 0.00001568" # Kinematic viscocity of air
 }
 
-# Initialize grid
+# Initialize grids
 flags = FlagGrid
 vel = MACGrid
 pressure = RealGrid
 # Helper grids for the K-Epsilon turbulence model
-k, eps, prod, nuT, strain = Realgrid
+k, eps, prod, nuT, strain = RealGrid
 turbSys = TurbulenceParticleSystem # Contains the particles
 
-flags.initDomain(boundaryWidth=1) # Create an empty box with solid boundaries
+# Create an empty box with solid boundaries
+flags.initDomain(boundaryWidth=1) 
 flags.fillGrid() # Mark all inner cells as fluid
 
-# Load a binvox model of the room, and add room geometry as solid blocks in flags
+# Load a binvox model of the room, 
+# and add room geometry as solid blocks in flags
 addModel(flags, "r1.binvox") 
 
 frontVelInflow = (0, 1, 0) # Air velocity for front inflow
 frontRate = 50 # Particle generation rate
-frontInflow = Box(startPos, endPos) # Create a geometric shape of desired size
-frontInflow.applyToGrid(flags, FlagInflow) # Set 'inflow' flag to cells marking the inflow
+# Create a geometric shape of desired size
+frontInflow = Box(startPos, endPos) 
+# Set 'inflow' flag to cells marking the inflow
+frontInflow.applyToGrid(flags, FlagInflow) 
 
 # Add a passive outflow
 outflow = Box(startPos, endPos)
 outflow.applyToGrid(flags, FlagEmpty|FlagOutflow)
 
-# Initialize K-epsilon grids
+# Initialize k and eps grids
 KEpsilonBcs(flags, k, eps, turbParams, init=True)
 
 # Main loop
 for _ in range(numFrames):
   turbSys.seed(frontInflow, frontRate) # Add particles to the inflow
-  turbSys.advectInGrid(flags, vel) # Advect the particles in the particle system
+  # Advect the particles in the particle system
+  turbSys.advectInGrid(flags, vel) 
   # Delete particles which have (inadvertently) moved onto an obstacle
   turbSys.deleteInObstacle(flags) 
   advectSemiLagrange(flags=flags, vel=vel, grid=k)# Advect the k grid 
   advectSemiLagrange(flags=flags, vel=vel, grid=eps) # Advect the eps grid
-  KEpsilonBcs(flags, k eps, turbParams, init=False) # Enforce K-Eps boundary conditions at walls
-  KEpsilonComputeProduction(vel, k, eps, prod, nuT, strain) # Compute K-Eps production term
+  # Enforce K-Eps boundary conditions at walls
+  KEpsilonBcs(flags, k eps, turbParams, init=False) 
+  # Compute K-Eps production term
+  KEpsilonComputeProduction(vel, k, eps, prod, nuT, strain) 
   
   advectSemiLagrange(flags=flags, vel=vel, grid=vel) # Advect the velocity grid 
-  frontIn.applyToGrid(grid=vel, value=frontVelInflow) # Enforce particle velocity at inflows 
+  # Enforce particle velocity at inflows 
+  frontIn.applyToGrid(grid=vel, value=frontVelInflow) 
   setWallBcs(flags, vel) # Enforce no-slip boundary condition at walls
   solvePressure(flags, vel, pressure) # Perform pressure projection
