@@ -81,6 +81,9 @@ bWidth = 1
 gridSize = vec3(resX, resY, resZ)
 resV = [res, res, res]
 
+addFront = True
+addChairs= True
+addSides = False
 """
 First, a solver object is created. Solver objects are the parent object for
 grids, particle systems and most other simulation objects. It requires
@@ -112,7 +115,13 @@ noise = s.create(NoiseField)
 noise.timeAnim = 0
 
 # turbulence particles
+empty = s.create(TurbulenceParticleSystem, noise=noise)
 turb = s.create(TurbulenceParticleSystem, noise=noise)
+
+fturb = s.create(TurbulenceParticleSystem, noise=noise)
+cturb = s.create(TurbulenceParticleSystem, noise=noise)
+sLturb = s.create(TurbulenceParticleSystem, noise=noise)
+sRturb = s.create(TurbulenceParticleSystem, noise=noise)
 
 # As most plugins expect the outmost cells of a simulation to be obstacles,
 # this should always be used. 
@@ -138,12 +147,13 @@ for x1 in range(x[0], x[1]+1):
 # Add front inflow
 fVelInflow = vec3(0, 1, 0)
 #frontIn = Box( parent=s, p0=(16,2,2), p1=(24,3,4))
-frontIn = Box( parent=s, p0=(12,2,2), p1=(28,3,4))
-# Set Inflow(8) + Fluid(1) flag to inflow shape. Don't know if those flags are optimal.
-frontIn.applyToGrid(grid=flags, value=9)
+if addFront:
+  frontIn = Box( parent=s, p0=(12,2,2), p1=(28,3,4))
+  # Set Inflow(8) + Fluid(1) flag to inflow shape. Don't know if those flags are optimal.
+  frontIn.applyToGrid(grid=flags, value=9)
 
 # Add inflows beneath chairs
-def addChairInflow(p0, p1):
+def addInflow(p0, p1):
   print("Modelled char in at p1=%s, p2=%s" % (p0, p1))
   cbox = Box(parent=s, p0=p0, p1=p1)
   cbox.applyToGrid(grid=flags, value=9)
@@ -167,10 +177,23 @@ yzs = [
 x_lrs = [[11,16], [23,28]]
 
 chairIns = []
-for x_lr in x_lrs:
-  for yz in yzs:
-    chairIns.append(addChairInflow((x_lr[0], yz[0], yz[1]), (x_lr[1], yz[0]+1, yz[1]+1)))
+if addChairs:
+  for x_lr in x_lrs:
+    for yz in yzs:
+      chairIns.append(addInflow((x_lr[0], yz[0], yz[1]), (x_lr[1], yz[0]+1, yz[1]+1)))
 
+
+sVelInflowL = vec3(0.5, 0, 0)
+sVelInflowR = vec3(-0.5, 0, 0)
+
+sideInsR = []
+sideInsL = []
+if addSides:
+  for yz in yzs[:-1]:
+    sYup = yz[0]-1
+    sYdown = yz[0]-1-5
+    sideInsL.append(addInflow((2, sYdown, yz[1]), (3, sYup, yz[1]+1)))  
+    sideInsR.append(addInflow((37, sYdown, yz[1]), (38, sYup, yz[1]+1)))  
 
 # Add roof outflows
 for x1 in range(6, resX, 7): # 40
@@ -217,14 +240,30 @@ for t in range(args.numFrames):
     enableDiffuse = checkDiff.get()
     prodMult = sliderProd.get()
 
-  turb.seed(frontIn,50) # particle generation rate
+  turb.seed(frontIn, 50) # particle generation rate
   for chairIn in chairIns:
     turb.seed(chairIn, 5)
-  
+  for sideIn in sideInsL:
+    turb.seed(sideIn, 5)
+  for sideIn in sideInsR:
+    turb.seed(sideIn, 5)
+
   turb.advectInGrid(flags=flags, vel=vel, integrationMode=IntRK4)
-  turb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=fVelInflow)
-  if chairIns:
-    turb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=cVelInflow)
+  turb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=(0,0,0))
+  #fturb.advectInGrid(flags=flags, vel=vel, integrationMode=IntRK4)
+  #fturb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=fVelInflow)
+  #if chairIns:
+  #  cturb.advectInGrid(flags=flags, vel=vel, integrationMode=IntRK4)
+  #  cturb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=cVelInflow)
+  #if sideInsL:
+  #  sLturb.advectInGrid(flags=flags, vel=vel, integrationMode=IntRK4)
+  #  sLturb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=sVelInflowL)
+  #if sideInsR:
+  #  sRturb.advectInGrid(flags=flags, vel=vel, integrationMode=IntRK4)
+  #  sRturb.synthesize(flags=flags, octaves=1, k=k, switchLength=5, L0=L0, scale=mult, inflowBias=sVelInflowR)
+  #fturb.deleteInObstacle(flags)
+  #cturb.deleteInObstacle(flags)
+  #sLturb.deleteInObstacle(flags)
   turb.deleteInObstacle(flags)
   
   KEpsilonBcs(flags=flags,k=k,eps=eps,intensity=intensity,nu=nu,fillArea=False)
@@ -245,11 +284,19 @@ for t in range(args.numFrames):
   frontIn.applyToGrid(grid=vel, value=fVelInflow)
   for chairIn in chairIns:
     chairIn.applyToGrid(grid=vel, value=cVelInflow)
+  for sideIn in sideInsL:
+    sideIn.applyToGrid(grid=vel, value=sVelInflowL)
+  for sideIn in sideInsR:
+    sideIn.applyToGrid(grid=vel, value=sVelInflowR)
   solvePressure(flags=flags, vel=vel, pressure=pressure, cgMaxIterFac=0.5)
   setWallBcs(flags=flags, vel=vel)  
   frontIn.applyToGrid(grid=vel, value=fVelInflow)
   for chairIn in chairIns:
     chairIn.applyToGrid(grid=vel, value=cVelInflow)
+  for sideIn in sideInsL:
+    sideIn.applyToGrid(grid=vel, value=sVelInflowL)
+  for sideIn in sideInsR:
+    sideIn.applyToGrid(grid=vel, value=sVelInflowR)
   #setInflowBcs(vel=vel,dir='xXyYzZ', value=fVelInflow) # has problems with bwidth
 
   s.step() 

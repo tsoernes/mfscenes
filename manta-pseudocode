@@ -1,0 +1,47 @@
+turbParams = {
+  "L0" = 1           # Turbulent/eddie length scale
+  "I" = 0.37         # Turbulence intensity
+  "nu" = 0.00001568" # Kinematic viscocity of air
+}
+
+# Initialize grid
+flags = FlagGrid
+vel = MACGrid
+pressure = RealGrid
+# Helper grids for the K-Epsilon turbulence model
+k, eps, prod, nuT, strain = Realgrid
+turbSys = TurbulenceParticleSystem # Contains the particles
+
+flags.initDomain(boundaryWidth=1) # Create an empty box with solid boundaries
+flags.fillGrid() # Mark all inner cells as fluid
+
+# Load a binvox model of the room, and add room geometry as solid blocks in flags
+addModel(flags, "r1.binvox") 
+
+frontVelInflow = (0, 1, 0) # Air velocity for front inflow
+frontRate = 50 # Particle generation rate
+frontInflow = Box(startPos, endPos) # Create a geometric shape of desired size
+frontInflow.applyToGrid(flags, FlagInflow) # Set 'inflow' flag to cells marking the inflow
+
+# Add a passive outflow
+outflow = Box(startPos, endPos)
+outflow.applyToGrid(flags, FlagEmpty|FlagOutflow)
+
+# Initialize K-epsilon grids
+KEpsilonBcs(flags, k, eps, turbParams, init=True)
+
+# Main loop
+for _ in range(numFrames):
+  turbSys.seed(frontInflow, frontRate) # Add particles to the inflow
+  turbSys.advectInGrid(flags, vel) # Advect the particles in the particle system
+  # Delete particles which have (inadvertently) moved onto an obstacle
+  turbSys.deleteInObstacle(flags) 
+  advectSemiLagrange(flags=flags, vel=vel, grid=k)# Advect the k grid 
+  advectSemiLagrange(flags=flags, vel=vel, grid=eps) # Advect the eps grid
+  KEpsilonBcs(flags, k eps, turbParams, init=False) # Enforce K-Eps boundary conditions at walls
+  KEpsilonComputeProduction(vel, k, eps, prod, nuT, strain) # Compute K-Eps production term
+  
+  advectSemiLagrange(flags=flags, vel=vel, grid=vel) # Advect the velocity grid 
+  frontIn.applyToGrid(grid=vel, value=frontVelInflow) # Enforce particle velocity at inflows 
+  setWallBcs(flags, vel) # Enforce no-slip boundary condition at walls
+  solvePressure(flags, vel, pressure) # Perform pressure projection
